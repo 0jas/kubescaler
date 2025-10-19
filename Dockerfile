@@ -1,41 +1,41 @@
 #
 # --- STAGE 1: The "Builder" ---
 #
-# Slim-bullseye (Debian 11) image to build dependencies.
-FROM python:3.9-slim-bullseye AS builder
+FROM python:3.9.18-slim-bullseye AS builder
 
-WORKDIR /app
+WORKDIR /opt/builder
 
-# Install dependencies into a separate prefix
-# This makes it easy to copy the complete environment
+# Copy requirements file first
 COPY src/requirements.txt .
-RUN pip install --no-cache-dir --prefix="/install" -r requirements.txt
 
-# Copy the operator source code
-COPY src/operator.py operator.py
+# Install packages into a target directory
+# This uses the pinned versions from your new requirements.txt
+RUN pip install --no-cache-dir --target=./packages -r requirements.txt
 
 #
 # --- STAGE 2: The "Final" Image ---
 #
-# This is Google's "distroless" base image. It contains Python 3.9 (from debian11)
-# and nothing else (no shell, no apt, no-curl, etc.).
-FROM gcr.io/distroless/python3-debian11
+FROM python:3.9.18-slim-bullseye
 
-WORKDIR /app
+WORKDIR /usr/src/app
 
-# Copy the installed packages from the builder stage
-COPY --from=builder /install ./
+# Create a non-root user
+ARG UID=1001
+ARG GID=1001
+RUN addgroup --gid $GID kubescaler && \
+    adduser --uid $UID --gid $GID --disabled-password --gecos "" kubescaler
 
-# Copy the operator source code from the builder stage
-COPY --from=builder /app/operator.py .
+# Set env vars to find the packages and their executables
+ENV PYTHONPATH=/usr/src/app/packages
+ENV PATH=$PATH:/usr/src/app/packages/bin
 
-# Set the PYTHONPATH to find the installed packages
-ENV PYTHONPATH=/app/lib/python3.9/site-packages
+# Copy packages and source code from the builder
+COPY --from=builder /opt/builder/packages ./packages
+COPY src/operator.py .
 
-# Run as a non-root user (UID 1001). This is a standard non-root UID.
-USER 1001
+# Switch to the non-root user
+USER kubescaler
 
-# Set the entrypoint to the 'kopf' executable, which was installed
-# in the /app/bin directory by pip.
-ENTRYPOINT ["/usr/bin/python3", "-m", "kopf", "run", "operator.py"]
+# Set the entrypoint to run kopf as a module
+ENTRYPOINT ["python", "-m", "kopf", "run", "operator.py"]
 CMD []
