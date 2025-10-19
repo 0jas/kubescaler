@@ -1,41 +1,29 @@
-#
-# --- STAGE 1: The "Builder" ---
-#
-FROM python:3.9.18-slim-bullseye AS builder
+FROM python:3.9.18-slim-bookworm
 
-WORKDIR /opt/builder
-
-# Copy requirements file first
-COPY src/requirements.txt .
-
-# Install packages into a target directory
-# This uses the pinned versions from your new requirements.txt
-RUN pip install --no-cache-dir --target=./packages -r requirements.txt
-
-#
-# --- STAGE 2: The "Final" Image ---
-#
-FROM python:3.9.18-slim-bullseye
-
+# Set a working directory
 WORKDIR /usr/src/app
 
-# Create a non-root user
+# Define arguments for user and group IDs for better flexibility
 ARG UID=1001
 ARG GID=1001
+
+# Create a non-root user and group for the application
+# --disabled-password ensures the user cannot be logged into
+# --gecos "" prevents it from asking for user information
 RUN addgroup --gid $GID kubescaler && \
     adduser --uid $UID --gid $GID --disabled-password --gecos "" kubescaler
 
-# Set env vars to find the packages and their executables
-ENV PYTHONPATH=/usr/src/app/packages
-ENV PATH=$PATH:/usr/src/app/packages/bin
+# Copy source code and set ownership in a single layer for efficiency
+# This ensures the non-root user can read the file.
+COPY --chown=kubescaler:kubescaler src/operator.py .
 
-# Copy packages and source code from the builder
-COPY --from=builder /opt/builder/packages ./packages
-COPY src/operator.py .
+# Install dependencies
+RUN pip install --no-cache-dir kopf kubernetes pytz
 
 # Switch to the non-root user
+# Any subsequent commands (like CMD) will run as this user
 USER kubescaler
 
-# Set the entrypoint to run kopf as a module
-ENTRYPOINT ["python", "-m", "kopf", "run", "operator.py"]
+# Set the entrypoint to run kopf
+ENTRYPOINT ["kopf", "run", "operator.py"]
 CMD []
