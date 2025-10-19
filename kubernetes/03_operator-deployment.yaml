@@ -1,0 +1,38 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: kubescaler-operator
+  namespace: kubescaler-system
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: kubescaler-operator
+  template:
+    metadata:
+      labels:
+        app: kubescaler-operator
+    spec:
+      serviceAccountName: kubescaler-sa
+      securityContext:
+        runAsUser: 1001
+        runAsGroup: 1001
+        runAsNonRoot: true
+      containers:
+      - name: operator
+        image: 0jas/kubescaler:latest
+        imagePullPolicy: Always
+        env:
+        - name: MAX_BACKUPS_TO_RETAIN
+          value: "5"
+        args:
+          - "kopf"
+          - "run"
+          - "operator.py"
+          - "--all-namespaces"
+        securityContext:
+          capabilities:
+            drop:
+              - "ALL"
+          allowPrivilegeEscalation: false
+          readOnlyRootFilesystem: true
