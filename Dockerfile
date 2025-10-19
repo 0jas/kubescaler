@@ -37,5 +37,5 @@ USER 1001
 
 # Set the entrypoint to the 'kopf' executable, which was installed
 # in the /app/bin directory by pip.
-ENTRYPOINT ["/app/bin/kopf", "run", "operator.py"]
+ENTRYPOINT ["/usr/bin/python3", "-m", "kopf", "run", "operator.py"]
 CMD []
