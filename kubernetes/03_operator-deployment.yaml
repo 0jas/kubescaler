@@ -26,9 +26,6 @@ spec:
         - name: MAX_BACKUPS_TO_RETAIN
           value: "5"
         args:
-          - "kopf"
-          - "run"
-          - "operator.py"
           - "--all-namespaces"
         securityContext:
           capabilities:

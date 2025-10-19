@@ -1,29 +1,41 @@
-FROM python:3.9.18-slim-bookworm
+#
+# --- STAGE 1: The "Builder" ---
+#
+# Slim-bullseye (Debian 11) image to build dependencies.
+FROM python:3.9-slim-bullseye AS builder
 
-# Set a working directory
-WORKDIR /usr/src/app
+WORKDIR /app
 
-# Define arguments for user and group IDs for better flexibility
-ARG UID=1001
-ARG GID=1001
+# Install dependencies into a separate prefix
+# This makes it easy to copy the complete environment
+COPY src/requirements.txt .
+RUN pip install --no-cache-dir --prefix="/install" -r requirements.txt
 
-# Create a non-root user and group for the application
-# --disabled-password ensures the user cannot be logged into
-# --gecos "" prevents it from asking for user information
-RUN addgroup --gid $GID kubescaler && \
-    adduser --uid $UID --gid $GID --disabled-password --gecos "" kubescaler
+# Copy the operator source code
+COPY src/operator.py operator.py
 
-# Copy source code and set ownership in a single layer for efficiency
-# This ensures the non-root user can read the file.
-COPY --chown=kubescaler:kubescaler src/operator.py .
+#
+# --- STAGE 2: The "Final" Image ---
+#
+# This is Google's "distroless" base image. It contains Python 3.9 (from debian11)
+# and nothing else (no shell, no apt, no-curl, etc.).
+FROM gcr.io/distroless/python3-debian11
 
-# Install dependencies
-RUN pip install --no-cache-dir kopf kubernetes pytz
+WORKDIR /app
 
-# Switch to the non-root user
-# Any subsequent commands (like CMD) will run as this user
-USER kubescaler
+# Copy the installed packages from the builder stage
+COPY --from=builder /install ./
 
-# Set the command to run the operator.
-# The --all-namespaces flag is removed and will be managed in the K8s manifest.
-CMD ["kopf", "run", "operator.py"]
+# Copy the operator source code from the builder stage
+COPY --from=builder /app/operator.py .
+
+# Set the PYTHONPATH to find the installed packages
+ENV PYTHONPATH=/app/lib/python3.9/site-packages
+
+# Run as a non-root user (UID 1001). This is a standard non-root UID.
+USER 1001
+
+# Set the entrypoint to the 'kopf' executable, which was installed
+# in the /app/bin directory by pip.
+ENTRYPOINT ["/app/bin/kopf", "run", "operator.py"]
+CMD []
