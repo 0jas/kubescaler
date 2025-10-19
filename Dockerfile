@@ -24,6 +24,6 @@ RUN pip install --no-cache-dir kopf kubernetes pytz
 # Any subsequent commands (like CMD) will run as this user
 USER kubescaler
 
-# Set the command to run the operator.
-# The --all-namespaces flag is removed and will be managed in the K8s manifest.
-CMD ["kopf", "run", "operator.py"]
+# Set the entrypoint to run kopf
+ENTRYPOINT ["kopf", "run", "operator.py"]
+CMD []
